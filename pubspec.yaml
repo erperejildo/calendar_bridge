@@ -3,6 +3,13 @@ description: A cross-platform Flutter plugin for accessing and managing device c
 version: 1.0.3
 homepage: https://github.com/ahmtydn/calendar_bridge
 
+topics:
+  - calendar
+  - calendar-events
+  - event-management
+  - recurring-events
+  - native-calendar
+
 environment:
   sdk: '>=3.0.0 <4.0.0'
   flutter: ">=3.3.0"

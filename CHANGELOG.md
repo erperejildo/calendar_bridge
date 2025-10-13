@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.4
+### Bug Fixes
+- Fixed timezone handling issue by updating the `timezone` dependency to version `0.10.1`, ensuring better compatibility and functionality across different platforms.
+
 ## 1.0.3
 ### Bug Fixes
 - bug fix

@@ -35,7 +35,7 @@ dependencies:
   flutter_riverpod: ^2.6.1
   
   # Date and time utilities
-  timezone: ^0.9.4
+  timezone: ^0.10.1
   intl: ^0.20.2
   
   # Additional UI components

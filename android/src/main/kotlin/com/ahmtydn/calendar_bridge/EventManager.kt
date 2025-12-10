@@ -9,8 +9,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
+import android.util.Log
 
 class EventManager(private val context: Context) {
+
+    companion object {
+        private const val TAG = "EventManager"
+    }
 
     suspend fun retrieveEvents(calendarId: String, arguments: Map<String, Any>): List<Map<String, Any>> = withContext(Dispatchers.IO) {
         val events = mutableListOf<Map<String, Any>>()
@@ -169,8 +174,11 @@ class EventManager(private val context: Context) {
                 put(CalendarContract.Events.STATUS, statusFromString(it as String))
             }
             
-            arguments["recurrenceRule"]?.let { 
-                put(CalendarContract.Events.RRULE, it as String)
+            arguments["recurrenceRule"]?.let {
+                val raw = it as String
+                val normalized = if (raw.startsWith("RRULE:", ignoreCase = true)) raw.substring(6).trim() else raw.trim()
+                Log.d(TAG, "Normalized recurrence rule to: $normalized")
+                put(CalendarContract.Events.RRULE, normalized)
             }
         }
 
@@ -246,8 +254,11 @@ class EventManager(private val context: Context) {
             values.put(CalendarContract.Events.STATUS, statusFromString(it as String))
         }
         
-        arguments["recurrenceRule"]?.let { 
-            values.put(CalendarContract.Events.RRULE, it as String)
+        arguments["recurrenceRule"]?.let {
+            val raw = it as String
+            val normalized = if (raw.startsWith("RRULE:", ignoreCase = true)) raw.substring(6).trim() else raw.trim()
+            Log.d(TAG, "Normalized recurrence rule to: $normalized")
+            values.put(CalendarContract.Events.RRULE, normalized)
         }
 
         val updatedRows = context.contentResolver.update(

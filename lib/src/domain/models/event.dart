@@ -46,7 +46,8 @@ class CalendarEvent {
       location: json['location'] as String?,
       url: json['url'] as String?,
       recurrenceRule: json['recurrenceRule'] != null
-          ? RecurrenceRule.fromString(json['recurrenceRule'] as String)
+          ? RecurrenceRule.fromString(
+              _normalizeRRule(json['recurrenceRule'] as String))
           : null,
       originalStart: json['originalStart'] != null
           ? TZDateTime.fromMillisecondsSinceEpoch(
@@ -73,6 +74,13 @@ class CalendarEvent {
           : null,
       eventColor: json['eventColor'] as String?,
     );
+  }
+
+  static String _normalizeRRule(String rrule) {
+    if (!rrule.startsWith('RRULE:')) {
+      return 'RRULE:$rrule';
+    }
+    return rrule;
   }
 
   /// Create a new event with required fields

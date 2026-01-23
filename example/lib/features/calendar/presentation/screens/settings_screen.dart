@@ -265,7 +265,7 @@ class SettingsScreen extends ConsumerWidget {
                       title: Text(calendar.name),
                       subtitle: Text(calendar.accountName ?? 'Local Calendar'),
                       onTap: () {
-                        // TODO: Implement setting default calendar
+                        // TODO(ahmtydn): Implement setting default calendar
                         Navigator.of(context).pop();
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(

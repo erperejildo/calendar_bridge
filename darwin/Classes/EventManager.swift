@@ -28,14 +28,12 @@ class EventManager {
         var events: [EKEvent] = []
         
         if let eventIds = eventIds {
-            // Retrieve specific events by ID
             for eventId in eventIds {
                 if let event = eventStore.event(withIdentifier: eventId) {
                     events.append(event)
                 }
             }
         } else {
-            // Retrieve events by date range
             let predicate = eventStore.predicateForEvents(
                 withStart: startDate ?? Date.distantPast,
                 end: endDate ?? Date.distantFuture,
@@ -172,12 +170,10 @@ class EventManager {
             event.endDate = endDate
         }
         
-        // Handle attendees
         if let attendeesData = dict["attendees"] as? [[String: Any]] {
             setAttendees(attendeesData, event)
         }
         
-        // Handle reminders
         if let remindersData = dict["reminders"] as? [[String: Any]] {
             let alarms = remindersData.compactMap { reminderDict -> EKAlarm? in
                 guard let minutes = reminderDict["minutes"] as? Int else { return nil }
@@ -186,7 +182,6 @@ class EventManager {
             event.alarms = alarms
         }
         
-        // Handle availability
         if let availabilityString = dict["availability"] as? String {
             switch availabilityString {
             case "busy":
@@ -206,8 +201,14 @@ class EventManager {
             }
         }
         
-        // Handle recurrence rule
-        if let recurrenceDict = dict["recurrenceRule"] as? [String: Any] {
+        // Handle recurrence rule - accept both string and dictionary formats
+        if let recurrenceString = dict["recurrenceRule"] as? String {
+            // String format from rrule package: "RRULE:FREQ=DAILY;COUNT=10"
+            if let rules = parseRRULEString(recurrenceString) {
+                event.recurrenceRules = rules
+            }
+        } else if let recurrenceDict = dict["recurrenceRule"] as? [String: Any] {
+            // Dictionary format (legacy support)
             event.recurrenceRules = createEKRecurrenceRules(recurrenceDict)
         }
     }
@@ -235,14 +236,13 @@ class EventManager {
         dict["start"] = Int(event.startDate.timeIntervalSince1970 * 1000)
         dict["end"] = Int(event.endDate.timeIntervalSince1970 * 1000)
         
-        // Handle attendees
         if let attendees = event.attendees {
             let attendeesData = attendees.map { attendee in
                 #if os(iOS)
                 var email = ""
                 let url = attendee.url
                 if url.scheme == "mailto" {
-                    email = String(url.absoluteString.dropFirst(7)) 
+                    email = String(url.absoluteString.dropFirst(7))
                 } else {
                     email = url.absoluteString
                 }
@@ -259,7 +259,6 @@ class EventManager {
             dict["attendees"] = attendeesData
         }
         
-        // Handle reminders
         if let alarms = event.alarms {
             let remindersData = alarms.compactMap { alarm -> [String: Any]? in
                 #if os(iOS)
@@ -272,11 +271,15 @@ class EventManager {
             dict["reminders"] = remindersData
         }
         
-        // Handle availability
         dict["availability"] = availabilityToString(event.availability)
-        
-        // Handle status
         dict["status"] = statusToString(event.status)
+        
+        // Convert recurrence rules to RRULE string format
+        if let recurrenceRules = event.recurrenceRules, !recurrenceRules.isEmpty {
+            if let rruleString = convertRecurrenceRulesToString(recurrenceRules) {
+                dict["recurrenceRule"] = rruleString
+            }
+        }
         
         var originalStartDate: Int64? = nil
         
@@ -391,6 +394,211 @@ class EventManager {
     
     // MARK: - Recurrence Rule Handling
     
+    private func parseRRULEString(_ rruleString: String) -> [EKRecurrenceRule]? {
+        // Remove "RRULE:" prefix if present
+        var ruleString = rruleString
+        if ruleString.hasPrefix("RRULE:") {
+            ruleString = String(ruleString.dropFirst(6))
+        }
+        
+        // Parse the RRULE string into components
+        var components: [String: String] = [:]
+        let parts = ruleString.split(separator: ";")
+        
+        for part in parts {
+            let keyValue = part.split(separator: "=", maxSplits: 1)
+            if keyValue.count == 2 {
+                components[String(keyValue[0])] = String(keyValue[1])
+            }
+        }
+        
+        // Extract frequency (required)
+        guard let freqString = components["FREQ"] else {
+            return nil
+        }
+        
+        var ekFrequency: EKRecurrenceFrequency
+        switch freqString.uppercased() {
+        case "DAILY":
+            ekFrequency = .daily
+        case "WEEKLY":
+            ekFrequency = .weekly
+        case "MONTHLY":
+            ekFrequency = .monthly
+        case "YEARLY":
+            ekFrequency = .yearly
+        default:
+            return nil
+        }
+        
+        // Extract interval (optional, default 1)
+        let interval = components["INTERVAL"].flatMap { Int($0) } ?? 1
+        
+        // Extract end condition
+        var recurrenceEnd: EKRecurrenceEnd?
+        if let countString = components["COUNT"], let count = Int(countString), count > 0 {
+            recurrenceEnd = EKRecurrenceEnd(occurrenceCount: count)
+        } else if let untilString = components["UNTIL"] {
+            if let endDate = parseUntilDate(untilString) {
+                recurrenceEnd = EKRecurrenceEnd(end: endDate)
+            }
+        }
+        
+        // Parse BYDAY
+        var daysOfWeek: [EKRecurrenceDayOfWeek]?
+        if let byDayString = components["BYDAY"] {
+            let dayStrings = byDayString.split(separator: ",").map { String($0) }
+            daysOfWeek = dayStrings.compactMap { recurrenceDayOfWeekFromString($0) }
+        }
+        
+        // Parse BYMONTHDAY
+        var daysOfMonth: [NSNumber]?
+        if let byMonthDayString = components["BYMONTHDAY"] {
+            let days = byMonthDayString.split(separator: ",").compactMap { Int($0) }
+            daysOfMonth = days.map { NSNumber(value: $0) }
+        }
+        
+        // Parse BYMONTH
+        var monthsOfYear: [NSNumber]?
+        if let byMonthString = components["BYMONTH"] {
+            let months = byMonthString.split(separator: ",").compactMap { Int($0) }
+            monthsOfYear = months.map { NSNumber(value: $0) }
+        }
+        
+        // Parse BYYEARDAY
+        var daysOfYear: [NSNumber]?
+        if let byYearDayString = components["BYYEARDAY"] {
+            let days = byYearDayString.split(separator: ",").compactMap { Int($0) }
+            daysOfYear = days.map { NSNumber(value: $0) }
+        }
+        
+        // Parse BYWEEKNO
+        var weeksOfYear: [NSNumber]?
+        if let byWeekNoString = components["BYWEEKNO"] {
+            let weeks = byWeekNoString.split(separator: ",").compactMap { Int($0) }
+            weeksOfYear = weeks.map { NSNumber(value: $0) }
+        }
+        
+        // Parse BYSETPOS
+        var setPositions: [NSNumber]?
+        if let bySetPosString = components["BYSETPOS"] {
+            let positions = bySetPosString.split(separator: ",").compactMap { Int($0) }
+            setPositions = positions.map { NSNumber(value: $0) }
+        }
+        
+        let rule = EKRecurrenceRule(
+            recurrenceWith: ekFrequency,
+            interval: interval,
+            daysOfTheWeek: daysOfWeek,
+            daysOfTheMonth: daysOfMonth,
+            monthsOfTheYear: monthsOfYear,
+            weeksOfTheYear: weeksOfYear,
+            daysOfTheYear: daysOfYear,
+            setPositions: setPositions,
+            end: recurrenceEnd
+        )
+        
+        return [rule]
+    }
+    
+    private func convertRecurrenceRulesToString(_ rules: [EKRecurrenceRule]) -> String? {
+        guard let rule = rules.first else { return nil }
+        
+        var components: [String] = []
+        
+        // Add frequency
+        let freqString: String
+        switch rule.frequency {
+        case .daily:
+            freqString = "DAILY"
+        case .weekly:
+            freqString = "WEEKLY"
+        case .monthly:
+            freqString = "MONTHLY"
+        case .yearly:
+            freqString = "YEARLY"
+        @unknown default:
+            freqString = "DAILY"
+        }
+        components.append("FREQ=\(freqString)")
+        
+        // Add interval if not 1
+        if rule.interval > 1 {
+            components.append("INTERVAL=\(rule.interval)")
+        }
+        
+        // Add count or until
+        if let recurrenceEnd = rule.recurrenceEnd {
+            if recurrenceEnd.occurrenceCount > 0 {
+                components.append("COUNT=\(recurrenceEnd.occurrenceCount)")
+            } else if let endDate = recurrenceEnd.endDate {
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime]
+                let dateString = formatter.string(from: endDate)
+                components.append("UNTIL=\(dateString)")
+            }
+        }
+        
+        // Add BYDAY
+        if let daysOfWeek = rule.daysOfTheWeek, !daysOfWeek.isEmpty {
+            let dayStrings = daysOfWeek.map { day -> String in
+                let prefix = day.weekNumber != 0 ? "\(day.weekNumber)" : ""
+                let dayCode: String
+                switch day.dayOfTheWeek {
+                case .sunday: dayCode = "SU"
+                case .monday: dayCode = "MO"
+                case .tuesday: dayCode = "TU"
+                case .wednesday: dayCode = "WE"
+                case .thursday: dayCode = "TH"
+                case .friday: dayCode = "FR"
+                case .saturday: dayCode = "SA"
+                @unknown default: dayCode = "MO"
+                }
+                return "\(prefix)\(dayCode)"
+            }
+            components.append("BYDAY=\(dayStrings.joined(separator: ","))")
+        }
+        
+        // Add BYMONTHDAY
+        if let daysOfMonth = rule.daysOfTheMonth, !daysOfMonth.isEmpty {
+            let dayStrings = daysOfMonth.map { "\($0.intValue)" }
+            components.append("BYMONTHDAY=\(dayStrings.joined(separator: ","))")
+        }
+        
+        // Add BYMONTH
+        if let monthsOfYear = rule.monthsOfTheYear, !monthsOfYear.isEmpty {
+            let monthStrings = monthsOfYear.map { "\($0.intValue)" }
+            components.append("BYMONTH=\(monthStrings.joined(separator: ","))")
+        }
+        
+        // Add BYYEARDAY
+        if let daysOfYear = rule.daysOfTheYear, !daysOfYear.isEmpty {
+            let dayStrings = daysOfYear.map { "\($0.intValue)" }
+            components.append("BYYEARDAY=\(dayStrings.joined(separator: ","))")
+        }
+        
+        // Add BYWEEKNO
+        if let weeksOfYear = rule.weeksOfTheYear, !weeksOfYear.isEmpty {
+            let weekStrings = weeksOfYear.map { "\($0.intValue)" }
+            components.append("BYWEEKNO=\(weekStrings.joined(separator: ","))")
+        }
+        
+        // Add BYSETPOS
+        if let setPositions = rule.setPositions, !setPositions.isEmpty {
+            let posStrings = setPositions.map { "\($0.intValue)" }
+            components.append("BYSETPOS=\(posStrings.joined(separator: ","))")
+        }
+        
+        // Return with RRULE: prefix for consistency with rrule package
+        return "RRULE:" + components.joined(separator: ";")
+    }
+    
+    private func parseUntilDate(_ dateString: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: dateString)
+    }
+    
     private func createEKRecurrenceRules(_ recurrenceDict: [String: Any]) -> [EKRecurrenceRule]? {
         guard let frequency = recurrenceDict["freq"] as? String else { return nil }
         
@@ -423,37 +631,31 @@ class EventManager {
             }
         }
         
-        // Parse BYDAY values
         var daysOfWeek: [EKRecurrenceDayOfWeek]?
         if let byDayStrings = recurrenceDict["byday"] as? [String] {
             daysOfWeek = byDayStrings.compactMap { recurrenceDayOfWeekFromString($0) }
         }
         
-        // Parse BYMONTHDAY values
         var daysOfMonth: [NSNumber]?
         if let byMonthDays = recurrenceDict["bymonthday"] as? [Int] {
             daysOfMonth = byMonthDays.map { NSNumber(value: $0) }
         }
         
-        // Parse BYMONTH values
         var monthsOfYear: [NSNumber]?
         if let byMonths = recurrenceDict["bymonth"] as? [Int] {
             monthsOfYear = byMonths.map { NSNumber(value: $0) }
         }
         
-        // Parse BYYEARDAY values
         var daysOfYear: [NSNumber]?
         if let byYearDays = recurrenceDict["byyearday"] as? [Int] {
             daysOfYear = byYearDays.map { NSNumber(value: $0) }
         }
         
-        // Parse BYWEEKNO values
         var weeksOfYear: [NSNumber]?
         if let byWeeks = recurrenceDict["byweekno"] as? [Int] {
             weeksOfYear = byWeeks.map { NSNumber(value: $0) }
         }
         
-        // Parse BYSETPOS values
         var setPositions: [NSNumber]?
         if let bySetPos = recurrenceDict["bysetpos"] as? [Int] {
             setPositions = bySetPos.map { NSNumber(value: $0) }
@@ -475,7 +677,6 @@ class EventManager {
     }
     
     private func recurrenceDayOfWeekFromString(_ dayString: String) -> EKRecurrenceDayOfWeek? {
-        // Parse strings like "MO", "TU", "1MO", "-1SU" etc.
         let pattern = "^(?:(\\+|-)?([0-9]{1,2}))?([A-Z]{2})$"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
               let match = regex.firstMatch(in: dayString, range: NSRange(dayString.startIndex..., in: dayString)) else {
@@ -485,12 +686,10 @@ class EventManager {
         var weekNumber: Int = 0
         var dayOfWeek: EKWeekday
         
-        // Extract week number if present
         if match.range(at: 2).location != NSNotFound {
             let weekNumberString = String(dayString[Range(match.range(at: 2), in: dayString)!])
             weekNumber = Int(weekNumberString) ?? 0
             
-            // Check for minus sign
             if match.range(at: 1).location != NSNotFound {
                 let signString = String(dayString[Range(match.range(at: 1), in: dayString)!])
                 if signString == "-" {
@@ -499,7 +698,6 @@ class EventManager {
             }
         }
         
-        // Extract day of week
         let dayString = String(dayString[Range(match.range(at: 3), in: dayString)!])
         switch dayString {
         case "SU": dayOfWeek = .sunday
@@ -529,7 +727,6 @@ class EventManager {
             let name = attendeeDict["name"] as? String ?? ""
             let role = attendeeDict["role"] as? Int ?? EKParticipantRole.required.rawValue
             
-            // Check if attendee already exists
             if let existingAttendees = event.attendees {
                 if let existingAttendee = existingAttendees.first(where: { participant in
                     return extractEmailFromParticipant(participant) == email
@@ -539,18 +736,15 @@ class EventManager {
                 }
             }
             
-            // Create new participant
             if let participant = createParticipant(name: name, emailAddress: email, role: role) {
                 attendees.append(participant)
             }
         }
         
-        // Use KVC to set attendees (this is a workaround since attendees is normally read-only)
         event.setValue(attendees, forKey: "attendees")
     }
     
     private func createParticipant(name: String, emailAddress: String, role: Int) -> EKParticipant? {
-        // This uses a private API approach similar to the reference implementation
         guard let ekAttendeeClass = NSClassFromString("EKAttendee") as? NSObject.Type else {
             return nil
         }
@@ -573,7 +767,6 @@ class EventManager {
             return url.absoluteString
         }
         #elseif os(macOS)
-        // For macOS, try to get email from the URL or use reflection to access emailAddress
         if let emailAddress = participant.value(forKey: "emailAddress") as? String {
             return emailAddress
         }

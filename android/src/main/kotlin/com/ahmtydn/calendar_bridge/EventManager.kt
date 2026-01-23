@@ -7,15 +7,9 @@ import android.database.Cursor
 import android.provider.CalendarContract
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
 import java.util.*
-import android.util.Log
 
 class EventManager(private val context: Context) {
-
-    companion object {
-        private const val TAG = "EventManager"
-    }
 
     suspend fun retrieveEvents(calendarId: String, arguments: Map<String, Any>): List<Map<String, Any>> = withContext(Dispatchers.IO) {
         val events = mutableListOf<Map<String, Any>>()
@@ -43,12 +37,10 @@ class EventManager(private val context: Context) {
         var selectionArgs: Array<String>
 
         if (eventIds != null && eventIds.isNotEmpty()) {
-            // Query specific events by ID
             val placeholders = eventIds.joinToString(",") { "?" }
             selection = "${CalendarContract.Instances.EVENT_ID} IN ($placeholders)"
             selectionArgs = eventIds.toTypedArray()
         } else {
-            // Query by calendar and date range using Instances
             val selectionParts = mutableListOf("${CalendarContract.Events.CALENDAR_ID} = ?")
             val argsList = mutableListOf(calendarId)
 
@@ -65,7 +57,6 @@ class EventManager(private val context: Context) {
             selection = selectionParts.joinToString(" AND ")
             selectionArgs = argsList.toTypedArray()
         }
-
 
         val instancesUri = CalendarContract.Instances.CONTENT_URI.buildUpon().apply {
             ContentUris.appendId(this, startDate ?: 0L)
@@ -108,19 +99,19 @@ class EventManager(private val context: Context) {
 
                 description?.let { eventMap["description"] = it }
                 location?.let { eventMap["location"] = it }
-                rrule?.let { eventMap["recurrenceRule"] = it }
+                rrule?.let { 
+                    eventMap["recurrenceRule"] = "RRULE:$it"
+                }
   
                 if (rrule != null) {
                     eventMap["originalStart"] = originalStartTime
                 }
 
-                // Get attendees
                 val attendees = getEventAttendees(eventId)
                 if (attendees.isNotEmpty()) {
                     eventMap["attendees"] = attendees
                 }
 
-                // Get reminders
                 val reminders = getEventReminders(eventId)
                 if (reminders.isNotEmpty()) {
                     eventMap["reminders"] = reminders
@@ -176,8 +167,11 @@ class EventManager(private val context: Context) {
             
             arguments["recurrenceRule"]?.let {
                 val raw = it as String
-                val normalized = if (raw.startsWith("RRULE:", ignoreCase = true)) raw.substring(6).trim() else raw.trim()
-                Log.d(TAG, "Normalized recurrence rule to: $normalized")
+                val normalized = if (raw.startsWith("RRULE:", ignoreCase = true)) {
+                    raw.substring(6).trim()
+                } else {
+                    raw.trim()
+                }
                 put(CalendarContract.Events.RRULE, normalized)
             }
         }
@@ -188,12 +182,10 @@ class EventManager(private val context: Context) {
         val eventId = uri.lastPathSegment
             ?: throw CalendarException.PlatformError("Failed to get event ID")
 
-        // Add attendees if provided
         arguments["attendees"]?.let { attendees ->
             addEventAttendees(eventId, attendees as List<Map<String, Any>>)
         }
 
-        // Add reminders if provided
         arguments["reminders"]?.let { reminders ->
             addEventReminders(eventId, reminders as List<Map<String, Any>>)
         }
@@ -205,7 +197,6 @@ class EventManager(private val context: Context) {
         val eventId = arguments["eventId"] as? String
             ?: throw CalendarException.InvalidArgument("Event ID is required")
 
-        // Check if event exists
         val cursor = context.contentResolver.query(
             CalendarContract.Events.CONTENT_URI,
             arrayOf(CalendarContract.Events._ID),
@@ -256,8 +247,11 @@ class EventManager(private val context: Context) {
         
         arguments["recurrenceRule"]?.let {
             val raw = it as String
-            val normalized = if (raw.startsWith("RRULE:", ignoreCase = true)) raw.substring(6).trim() else raw.trim()
-            Log.d(TAG, "Normalized recurrence rule to: $normalized")
+            val normalized = if (raw.startsWith("RRULE:", ignoreCase = true)) {
+                raw.substring(6).trim()
+            } else {
+                raw.trim()
+            }
             values.put(CalendarContract.Events.RRULE, normalized)
         }
 
@@ -272,27 +266,21 @@ class EventManager(private val context: Context) {
             throw CalendarException.PlatformError("Failed to update event")
         }
 
-        // Update attendees if provided
         arguments["attendees"]?.let { attendees ->
-            // Delete existing attendees
             context.contentResolver.delete(
                 CalendarContract.Attendees.CONTENT_URI,
                 "${CalendarContract.Attendees.EVENT_ID} = ?",
                 arrayOf(eventId)
             )
-            // Add new attendees
             addEventAttendees(eventId, attendees as List<Map<String, Any>>)
         }
 
-        // Update reminders if provided
         arguments["reminders"]?.let { reminders ->
-            // Delete existing reminders
             context.contentResolver.delete(
                 CalendarContract.Reminders.CONTENT_URI,
                 "${CalendarContract.Reminders.EVENT_ID} = ?",
                 arrayOf(eventId)
             )
-            // Add new reminders
             addEventReminders(eventId, reminders as List<Map<String, Any>>)
         }
 
@@ -300,7 +288,6 @@ class EventManager(private val context: Context) {
     }
 
     suspend fun deleteEvent(calendarId: String, eventId: String): Boolean = withContext(Dispatchers.IO) {
-        // Verify event exists in the specified calendar
         val cursor = context.contentResolver.query(
             CalendarContract.Events.CONTENT_URI,
             arrayOf(CalendarContract.Events._ID, CalendarContract.Events.CALENDAR_ID),
@@ -325,7 +312,6 @@ class EventManager(private val context: Context) {
     }
 
     suspend fun deleteEventInstance(calendarId: String, eventId: String, startDate: Long, followingInstances: Boolean): Boolean = withContext(Dispatchers.IO) {
-        // Verify event exists in the specified calendar
         val cursor = context.contentResolver.query(
             CalendarContract.Events.CONTENT_URI,
             arrayOf(CalendarContract.Events._ID, CalendarContract.Events.CALENDAR_ID, CalendarContract.Events.RRULE),
@@ -343,7 +329,6 @@ class EventManager(private val context: Context) {
             isRecurring = !rrule.isNullOrEmpty()
         } ?: throw CalendarException.EventNotFound(eventId)
 
-        // For recurring events, create an exception instead of deleting
         if (isRecurring) {
             val exceptionValues = ContentValues().apply {
                 put(CalendarContract.Events.ORIGINAL_ID, eventId)
@@ -352,8 +337,6 @@ class EventManager(private val context: Context) {
                 put(CalendarContract.Events.STATUS, CalendarContract.Events.STATUS_CANCELED)
                 
                 if (followingInstances) {
-                    // For future events, we need to modify the original event's RRULE
-                    // This is a simplified implementation - in practice, you'd need to update the RRULE
                     put(CalendarContract.Events.DTSTART, startDate)
                 }
             }
@@ -361,7 +344,6 @@ class EventManager(private val context: Context) {
             val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, exceptionValues)
             return@withContext uri != null
         } else {
-            // For non-recurring events, just delete normally
             return@withContext deleteEvent(calendarId, eventId)
         }
     }

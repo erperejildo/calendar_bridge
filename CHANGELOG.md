@@ -5,6 +5,10 @@
 ### Bug Fixes
 - Fixed recurring-event creation validation for RRULE strings (e.g. `RRULE:FREQ=DAILY;COUNT=10`) that previously caused "Invalid recurrence rule" errors when calling `createEvent`. Thanks to @jaydaptif-solutions for reporting and testing the fix.
 
+### Improvements
+- Android: Implemented runtime calendar permission request flow and result propagation to Dart. `CalendarBridgePlugin` now listens for permission results and returns the granted/denied state to callers.
+- CalendarManager: Refactored permission handling by adding `PERMISSION_REQUEST_CODE` and switching to an explicit `requestPermissions(Activity)` method.
+
 ## 1.0.4
 ### Bug Fixes
 - Fixed timezone handling issue by updating the `timezone` dependency to version `0.10.1`, ensuring better compatibility and functionality across different platforms.

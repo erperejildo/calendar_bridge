@@ -16,8 +16,11 @@ import kotlinx.coroutines.withContext
 
 class CalendarManager(private val context: Context) {
     
+    companion object {
+        const val PERMISSION_REQUEST_CODE = 1000
+    }
+    
     private var activity: Activity? = null
-    private val requestCode = 1000
 
     fun setActivity(activity: Activity?) {
         this.activity = activity
@@ -36,7 +39,7 @@ class CalendarManager(private val context: Context) {
         
         return when {
             readGranted && writeGranted -> "granted"
-            else -> "denied" // Android doesn't have restricted or notDetermined states for these permissions
+            else -> "denied"
         }
     }
     
@@ -44,26 +47,15 @@ class CalendarManager(private val context: Context) {
         return hasPermissions() == "granted"
     }
 
-    suspend fun requestPermissions(activity: Activity?): Boolean = withContext(Dispatchers.Main) {
-        if (hasPermissionsBoolean()) {
-            return@withContext true
-        }
-
-        activity?.let {
-            ActivityCompat.requestPermissions(
-                it,
-                arrayOf(
-                    Manifest.permission.READ_CALENDAR,
-                    Manifest.permission.WRITE_CALENDAR
-                ),
-                requestCode
-            )
-            // Note: In a real implementation, you'd need to handle the result callback
-            // For now, we'll just return the current permission state
-            return@withContext hasPermissionsBoolean()
-        }
-
-        return@withContext false
+    fun requestPermissions(activity: Activity) {
+        ActivityCompat.requestPermissions(
+            activity,
+            arrayOf(
+                Manifest.permission.READ_CALENDAR,
+                Manifest.permission.WRITE_CALENDAR
+            ),
+            PERMISSION_REQUEST_CODE
+        )
     }
 
     suspend fun retrieveCalendars(): List<Map<String, Any>> = withContext(Dispatchers.IO) {
@@ -171,7 +163,6 @@ class CalendarManager(private val context: Context) {
             throw CalendarException.InvalidArgument("Calendar ID cannot be empty")
         }
 
-        // First check if calendar exists and is writable
         val projection = arrayOf(
             CalendarContract.Calendars._ID,
             CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL
@@ -232,18 +223,17 @@ class CalendarManager(private val context: Context) {
             }
         }
 
-        // Add some default colors if none are available
         if (colors.isEmpty()) {
-            colors["1"] = Color.parseColor("#FF0000") // Red
-            colors["2"] = Color.parseColor("#00FF00") // Green  
-            colors["3"] = Color.parseColor("#0000FF") // Blue
-            colors["4"] = Color.parseColor("#FFFF00") // Yellow
-            colors["5"] = Color.parseColor("#FFA500") // Orange
-            colors["6"] = Color.parseColor("#800080") // Purple
-            colors["7"] = Color.parseColor("#FFC0CB") // Pink
-            colors["8"] = Color.parseColor("#A52A2A") // Brown
-            colors["9"] = Color.parseColor("#808080") // Gray
-            colors["10"] = Color.parseColor("#000000") // Black
+            colors["1"] = Color.parseColor("#FF0000")
+            colors["2"] = Color.parseColor("#00FF00")
+            colors["3"] = Color.parseColor("#0000FF")
+            colors["4"] = Color.parseColor("#FFFF00")
+            colors["5"] = Color.parseColor("#FFA500")
+            colors["6"] = Color.parseColor("#800080")
+            colors["7"] = Color.parseColor("#FFC0CB")
+            colors["8"] = Color.parseColor("#A52A2A")
+            colors["9"] = Color.parseColor("#808080")
+            colors["10"] = Color.parseColor("#000000")
         }
 
         return@withContext colors
@@ -276,18 +266,17 @@ class CalendarManager(private val context: Context) {
             }
         }
 
-        // Add some default colors if none are available
         if (colors.isEmpty()) {
-            colors["1"] = Color.parseColor("#FF0000") // Red
-            colors["2"] = Color.parseColor("#00FF00") // Green  
-            colors["3"] = Color.parseColor("#0000FF") // Blue
-            colors["4"] = Color.parseColor("#FFFF00") // Yellow
-            colors["5"] = Color.parseColor("#FFA500") // Orange
-            colors["6"] = Color.parseColor("#800080") // Purple
-            colors["7"] = Color.parseColor("#FFC0CB") // Pink
-            colors["8"] = Color.parseColor("#A52A2A") // Brown
-            colors["9"] = Color.parseColor("#808080") // Gray
-            colors["10"] = Color.parseColor("#000000") // Black
+            colors["1"] = Color.parseColor("#FF0000")
+            colors["2"] = Color.parseColor("#00FF00")
+            colors["3"] = Color.parseColor("#0000FF")
+            colors["4"] = Color.parseColor("#FFFF00")
+            colors["5"] = Color.parseColor("#FFA500")
+            colors["6"] = Color.parseColor("#800080")
+            colors["7"] = Color.parseColor("#FFC0CB")
+            colors["8"] = Color.parseColor("#A52A2A")
+            colors["9"] = Color.parseColor("#808080")
+            colors["10"] = Color.parseColor("#000000")
         }
 
         return@withContext colors
@@ -298,7 +287,6 @@ class CalendarManager(private val context: Context) {
             throw CalendarException.PermissionDenied()
         }
 
-        // First check if calendar exists and is writable
         val projection = arrayOf(
             CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL
         )
@@ -322,7 +310,6 @@ class CalendarManager(private val context: Context) {
             }
         } ?: throw CalendarException.CalendarNotFound(calendarId)
 
-        // Get the color value from the color key
         val colors = getCalendarColors()
         val colorValue = colors[colorKey] ?: colors.values.firstOrNull() ?: Color.BLUE
 

@@ -9,17 +9,20 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import io.flutter.plugin.common.PluginRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /** CalendarBridgePlugin */
-class CalendarBridgePlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
+class CalendarBridgePlugin: FlutterPlugin, MethodCallHandler, ActivityAware, 
+    PluginRegistry.RequestPermissionsResultListener {
   private lateinit var channel: MethodChannel
   private lateinit var calendarManager: CalendarManager
   private lateinit var eventManager: EventManager
   private var activity: Activity? = null
   private val scope = CoroutineScope(Dispatchers.Main)
+  private var permissionResult: Result? = null
 
   override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "com.ahmtydn/calendar_bridge")
@@ -34,8 +37,7 @@ class CalendarBridgePlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
       try {
         when (call.method) {
           "requestPermissions" -> {
-            val granted = calendarManager.requestPermissions(activity)
-            result.success(granted)
+            handleRequestPermissions(result)
           }
           
           "hasPermissions" -> {
@@ -95,6 +97,36 @@ class CalendarBridgePlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
         handleError(e, result)
       }
     }
+  }
+
+  private fun handleRequestPermissions(result: Result) {
+    if (calendarManager.hasPermissionsBoolean()) {
+      result.success(true)
+      return
+    }
+    val currentActivity = activity
+    if (currentActivity == null) {
+      result.success(false)
+      return
+    }
+    permissionResult = result
+    calendarManager.requestPermissions(currentActivity)
+  }
+
+  override fun onRequestPermissionsResult(
+    requestCode: Int,
+    permissions: Array<out String>,
+    grantResults: IntArray
+  ): Boolean {
+    if (requestCode == CalendarManager.PERMISSION_REQUEST_CODE) {
+      val granted = calendarManager.hasPermissionsBoolean()
+      permissionResult?.let {
+        it.success(granted)
+        permissionResult = null
+      }
+      return true
+    }
+    return false
   }
 
   private suspend fun handleRetrieveCalendars(result: Result) {
@@ -273,6 +305,7 @@ class CalendarBridgePlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
   override fun onAttachedToActivity(binding: ActivityPluginBinding) {
     activity = binding.activity
     calendarManager.setActivity(activity)
+    binding.addRequestPermissionsResultListener(this)
   }
 
   override fun onDetachedFromActivityForConfigChanges() {
@@ -283,6 +316,7 @@ class CalendarBridgePlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
   override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
     activity = binding.activity
     calendarManager.setActivity(activity)
+    binding.addRequestPermissionsResultListener(this)
   }
 
   override fun onDetachedFromActivity() {

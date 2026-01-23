@@ -75,9 +75,28 @@ class CalendarPermissionWidget extends ConsumerWidget {
             const SizedBox(height: AppSpacing.xl),
             FilledButton.icon(
               onPressed: () async {
-                ref.invalidate(requestPermissionsProvider);
                 await ref.read(requestPermissionsProvider(null).future);
-                ref.invalidate(permissionsProvider);
+                final hasPermissions = await ref.refresh(
+                  permissionsProvider.future,
+                );
+
+                if (!hasPermissions && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Calendar permission not granted'),
+                    ),
+                  );
+                } else if (context.mounted) {
+                  ref.invalidate(calendarsProvider);
+                  ref.invalidate(writableCalendarsProvider);
+                  ref.invalidate(defaultCalendarProvider);
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Calendar permission granted'),
+                    ),
+                  );
+                }
               },
               icon: const Icon(Icons.security),
               label: const Text('Grant Permission'),

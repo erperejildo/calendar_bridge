@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'calendar_bridge'
-  s.version          = '1.0.0'
+  s.version          = '1.0.5'
   s.summary          = 'A cross-platform Flutter plugin for accessing and managing device calendars.'
   s.description      = <<-DESC
 A cross-platform Flutter plugin for accessing and managing device calendars on Android, iOS, and macOS with clean architecture.

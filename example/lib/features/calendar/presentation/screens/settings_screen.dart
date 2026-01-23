@@ -1,6 +1,8 @@
+import 'package:calendar_bridge/calendar_bridge.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timezone/timezone.dart';
 
 import '../../../../core/providers/calendar_providers.dart';
 import '../../../../core/theme/theme.dart';
@@ -171,6 +173,12 @@ class SettingsScreen extends ConsumerWidget {
                     subtitle: const Text('Reload calendars and events'),
                     onTap: () => _refreshAllData(context, ref),
                   ),
+                  ListTile(
+                    leading: const Icon(Icons.repeat),
+                    title: const Text('Create Recurring Test Event'),
+                    subtitle: const Text('Creates a daily RRULE (count=10)'),
+                    onTap: () => _createRecurringTestEvent(context, ref),
+                  ),
                 ],
               ),
             ],
@@ -178,6 +186,47 @@ class SettingsScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _createRecurringTestEvent(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    try {
+      final api = ref.read(calendarBridgeProvider);
+      final defaultCalendar = await api.getDefaultCalendar();
+
+      final start = TZDateTime.now(UTC).add(const Duration(hours: 1));
+      final end = start.add(const Duration(hours: 1));
+
+      final recurrence = RecurrenceRule(frequency: Frequency.daily, count: 10);
+
+      final event = CalendarEvent(
+        calendarId: defaultCalendar.id,
+        title: 'RRULE test',
+        start: start,
+        end: end,
+        recurrenceRule: recurrence,
+      );
+
+      await api.createEvent(event);
+      ref.invalidate(eventsProvider);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Recurring event created')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to create recurring event: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildSection(
@@ -265,7 +314,7 @@ class SettingsScreen extends ConsumerWidget {
                       title: Text(calendar.name),
                       subtitle: Text(calendar.accountName ?? 'Local Calendar'),
                       onTap: () {
-                        // TODO: Implement setting default calendar
+                        // TODO(ahmtydn): Implement setting default calendar
                         Navigator.of(context).pop();
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(

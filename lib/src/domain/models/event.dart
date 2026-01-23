@@ -29,6 +29,34 @@ class CalendarEvent {
     this.eventColor,
   });
 
+  /// Create a new event with required fields
+  factory CalendarEvent.create({
+    required String calendarId,
+    required String title,
+    required TZDateTime start,
+    required TZDateTime end,
+  }) =>
+      CalendarEvent(
+        calendarId: calendarId,
+        title: title,
+        start: start,
+        end: end,
+      );
+
+  /// Create an all-day event
+  factory CalendarEvent.allDay({
+    required String calendarId,
+    required String title,
+    required TZDateTime date,
+  }) =>
+      CalendarEvent(
+        calendarId: calendarId,
+        title: title,
+        start: date,
+        end: date.add(const Duration(days: 1)),
+        allDay: true,
+      );
+
   /// Creates a calendar event from a JSON map
   factory CalendarEvent.fromJson(Map<String, dynamic> json) {
     return CalendarEvent(
@@ -46,7 +74,9 @@ class CalendarEvent {
       location: json['location'] as String?,
       url: json['url'] as String?,
       recurrenceRule: json['recurrenceRule'] != null
-          ? RecurrenceRule.fromString(json['recurrenceRule'] as String)
+          ? RecurrenceRule.fromString(
+              _normalizeRRule(json['recurrenceRule'] as String),
+            )
           : null,
       originalStart: json['originalStart'] != null
           ? TZDateTime.fromMillisecondsSinceEpoch(
@@ -75,33 +105,12 @@ class CalendarEvent {
     );
   }
 
-  /// Create a new event with required fields
-  factory CalendarEvent.create({
-    required String calendarId,
-    required String title,
-    required TZDateTime start,
-    required TZDateTime end,
-  }) =>
-      CalendarEvent(
-        calendarId: calendarId,
-        title: title,
-        start: start,
-        end: end,
-      );
-
-  /// Create an all-day event
-  factory CalendarEvent.allDay({
-    required String calendarId,
-    required String title,
-    required TZDateTime date,
-  }) =>
-      CalendarEvent(
-        calendarId: calendarId,
-        title: title,
-        start: date,
-        end: date.add(const Duration(days: 1)),
-        allDay: true,
-      );
+  static String _normalizeRRule(String rrule) {
+    if (!rrule.startsWith('RRULE:')) {
+      return 'RRULE:$rrule';
+    }
+    return rrule;
+  }
 
   /// ID of the calendar this event belongs to
   final String calendarId;

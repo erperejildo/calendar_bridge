@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 env:
-  FLUTTER_VERSION: '3.35.4'
+  FLUTTER_VERSION: '3.44.0'
 
 jobs:
   test:
@@ -24,7 +24,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
-      
+
       - name: Install dependencies
         run: flutter pub get
       
@@ -54,7 +54,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-      
+            
       - name: Install dependencies
         run: flutter pub get
       

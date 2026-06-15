@@ -119,13 +119,19 @@ public class CalendarBridgePlugin: NSObject, FlutterPlugin {
         print("CalendarBridgePlugin: macOS current authorization status = \(status.rawValue)")
         
         if #available(macOS 14.0, *) {
-            do {
-                let granted = try await eventStore.requestFullAccessToEvents()
-                print("CalendarBridgePlugin: requestFullAccessToEvents returned = \(granted)")
-                return granted
-            } catch {
-                print("CalendarBridgePlugin: requestFullAccessToEvents error = \(error)")
-                return false
+            // On macOS, requestFullAccessToEvents MUST be called on the main thread
+            // to show the permission dialog. Use DispatchQueue.main to ensure this.
+            return await withCheckedContinuation { continuation in
+                DispatchQueue.main.async {
+                    do {
+                        let granted = try self.eventStore.requestFullAccessToEvents()
+                        print("CalendarBridgePlugin: requestFullAccessToEvents returned = \(granted)")
+                        continuation.resume(returning: granted)
+                    } catch {
+                        print("CalendarBridgePlugin: requestFullAccessToEvents error = \(error)")
+                        continuation.resume(returning: false)
+                    }
+                }
             }
         } else {
             return await withCheckedContinuation { continuation in

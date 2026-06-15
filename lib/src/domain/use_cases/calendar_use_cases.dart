@@ -25,6 +25,13 @@ class CalendarUseCases {
     return _repository.hasPermissions();
   }
 
+  /// Open system calendar settings (macOS only)
+  ///
+  /// Opens System Settings > Privacy & Security > Calendars
+  Future<void> openCalendarSettings() async {
+    return _repository.openCalendarSettings();
+  }
+
   /// Get all available calendars
   ///
   /// Returns a list of calendars

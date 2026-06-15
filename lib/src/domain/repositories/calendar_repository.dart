@@ -25,6 +25,10 @@ abstract interface class CalendarRepository {
   /// Returns the permission status enum
   Future<PermissionStatus> hasPermissions();
 
+  /// Open system calendar settings (macOS only)
+  /// Opens System Settings > Privacy & Security > Calendars
+  Future<void> openCalendarSettings();
+
   /// Retrieve all calendars available on the device
   /// Throws [PermissionDeniedException] if permissions are not granted
   Future<List<Calendar>> getCalendars();

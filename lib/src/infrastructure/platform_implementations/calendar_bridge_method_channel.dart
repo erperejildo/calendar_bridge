@@ -37,6 +37,15 @@ final class CalendarBridgeMethodChannel implements CalendarRepository {
   }
 
   @override
+  Future<void> openCalendarSettings() async {
+    try {
+      await _methodChannel.invokeMethod<void>('openCalendarSettings');
+    } on PlatformException catch (e) {
+      throw _mapPlatformException(e);
+    }
+  }
+
+  @override
   Future<List<Calendar>> getCalendars() async {
     try {
       final result = await _methodChannel.invokeMethod<List<dynamic>>(

@@ -53,6 +53,11 @@ class CalendarBridge {
   Future<PermissionStatus> hasPermissions() =>
       _calendarUseCases.hasPermissions();
 
+  /// Open system calendar settings (macOS only)
+  /// Opens System Settings > Privacy & Security > Calendars
+  Future<void> openCalendarSettings() =>
+      _calendarUseCases.openCalendarSettings();
+
   /// Get all available calendars
   /// Throws [PermissionDeniedException] if permissions are not granted
   Future<List<Calendar>> getCalendars() => _calendarUseCases.getAllCalendars();

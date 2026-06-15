@@ -107,9 +107,17 @@ public class CalendarBridgePlugin: NSObject, FlutterPlugin {
             }
         }
         #elseif os(macOS)
-        return await withCheckedContinuation { continuation in
-            eventStore.requestAccess(to: .event) { granted, error in              
-                continuation.resume(returning: granted)
+        if #available(macOS 14.0, *) {
+            do {
+                return try await eventStore.requestFullAccessToEvents()
+            } catch {
+                return false
+            }
+        } else {
+            return await withCheckedContinuation { continuation in
+                eventStore.requestAccess(to: .event) { granted, error in
+                    continuation.resume(returning: granted)
+                }
             }
         }
         #endif

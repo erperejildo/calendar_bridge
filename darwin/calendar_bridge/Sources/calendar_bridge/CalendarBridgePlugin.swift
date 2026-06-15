@@ -47,6 +47,14 @@ public class CalendarBridgePlugin: NSObject, FlutterPlugin {
                     let permissionStatus = hasPermissions()
                     result(permissionStatus)
                     
+                case "openCalendarSettings":
+                    #if os(macOS)
+                    openCalendarSettings()
+                    result(true)
+                    #else
+                    result(false)
+                    #endif
+                    
                 case "retrieveCalendars":
                     try await handleRetrieveCalendars(result: result)
                     
@@ -107,21 +115,35 @@ public class CalendarBridgePlugin: NSObject, FlutterPlugin {
             }
         }
         #elseif os(macOS)
+        let status = EKEventStore.authorizationStatus(for: .event)
+        print("CalendarBridgePlugin: macOS current authorization status = \(status.rawValue)")
+        
         if #available(macOS 14.0, *) {
             do {
-                return try await eventStore.requestFullAccessToEvents()
+                let granted = try await eventStore.requestFullAccessToEvents()
+                print("CalendarBridgePlugin: requestFullAccessToEvents returned = \(granted)")
+                return granted
             } catch {
+                print("CalendarBridgePlugin: requestFullAccessToEvents error = \(error)")
                 return false
             }
         } else {
             return await withCheckedContinuation { continuation in
                 eventStore.requestAccess(to: .event) { granted, error in
+                    print("CalendarBridgePlugin: requestAccess returned = \(granted), error = \(String(describing: error))")
                     continuation.resume(returning: granted)
                 }
             }
         }
         #endif
     }
+    
+    #if os(macOS)
+    private func openCalendarSettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!
+        NSWorkspace.shared.open(url)
+    }
+    #endif
     
     private func hasPermissions() -> String {
         let status: EKAuthorizationStatus
